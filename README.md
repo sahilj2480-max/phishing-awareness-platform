@@ -36,6 +36,12 @@ Most companies care about information security, but "security" is as much a
   attachments.
 - **Reporting** — delivered/opened/clicked/submitted/reported metrics, a
   per-department breakdown, and text/JSON/CSV/HTML output.
+- **Live dashboard** — a Chart.js dashboard served at `/dashboard` with KPI
+  cards, per-campaign and per-department charts, and a results table.
+- **ML classifier** (optional, `scikit-learn`) — a logistic-regression model
+  trained on lexical URL features, with a bundled labeled dataset and an
+  `ml train` / `ml predict` workflow. Combine it with the heuristics via
+  `analyze url --ml`.
 - **Secrets hygiene** — SMTP credentials via environment variables, so nothing
   sensitive is ever committed.
 
@@ -63,6 +69,15 @@ python -m phishguard server
 # 6. Generate a report for a campaign
 python -m phishguard report 1 --format text
 python -m phishguard report 1 --format html   # writes report_1.html
+
+# 7. View the live dashboard (while the server is running)
+#    open http://127.0.0.1:5000/dashboard
+
+# 8. (Optional) train + use the ML classifier
+pip install -r requirements-ml.txt
+python -m phishguard ml train --data data/url_dataset.csv --model data/model.joblib
+python -m phishguard ml predict "http://paypal.secure-login.com/verify"
+python -m phishguard analyze url "http://secure-login.ml/verify" --ml
 ```
 
 ### Sending real email (optional, authorized use only)
@@ -82,12 +97,14 @@ python -m phishguard campaign send \
 python -m phishguard <command>
 
 init                                create example config.yaml + targets file
-analyze url <url>                   score a URL for phishing indicators
+analyze url <url> [--ml]            score a URL (optionally add ML verdict)
 analyze email <file.eml>            score a raw email (.eml) for phishing indicators
 campaign send --name N --template T --targets F [--send]
 campaign list                       list campaigns
 server [--debug]                    run the tracking/landing server
 report <id> [--format text|json|csv|html]
+ml train [--data D] [--model M]     train the ML classifier, save the model
+ml predict <url> [--model M]        classify a URL with a trained model
 ```
 
 ## Architecture
@@ -119,12 +136,18 @@ report <id> [--format text|json|csv|html]
                         │  events (open/click/submit/report) │
                         └───────────────┬────────────────────┘
                                         ▼
-                        ┌────────────────────────────────────┐
-                        │  reporting/report.py               │
-                        │  text / json / csv / html          │
-                        └────────────────────────────────────┘
+                         ┌────────────────────────────────────┐
+                         │  reporting/report.py               │
+                         │  text / json / csv / html          │
+                         └────────────────────────────────────┘
+                                         ▲
+                         ┌───────────────┴────────────────────┐
+                         │  landing/app.py  GET /dashboard    │
+                         │  (Chart.js: KPIs + charts)         │
+                         └────────────────────────────────────┘
 
-   (independent)  detection/analyzer.py  →  explainable phishing scoring
+   (independent)  detection/analyzer.py      →  explainable heuristic scoring
+   (independent)  detection/ml_classifier.py →  scikit-learn URL classifier
 ```
 
 ## Project structure
@@ -136,14 +159,16 @@ phishguard/
 │   ├── cli.py                 # argument parsing + command handlers
 │   ├── config.py              # dataclass config + YAML + env overrides
 │   ├── engine/                # targets, templates, sender, campaign
-│   ├── landing/               # Flask tracking/landing server
-│   ├── detection/             # heuristic analyzer
+│   ├── landing/               # Flask tracking/landing server + dashboard
+│   ├── detection/             # heuristic analyzer + ML classifier
 │   ├── reporting/             # metrics + report formatters
 │   └── storage/               # SQLite persistence
 ├── data/targets.example.csv
+├── data/url_dataset.csv        # labeled URLs for training the ML classifier
 ├── tests/
 ├── docs/architecture.md
 ├── requirements.txt
+├── requirements-ml.txt         # adds scikit-learn
 └── LICENSE
 ```
 
@@ -187,8 +212,9 @@ privacy laws. Use responsibly.
 ## Roadmap ideas
 
 - Template scheduler (send at staggered times to avoid bulk-detection).
-- ML URL classifier alongside the heuristic rules (for a more advanced demo).
-- REST API and a small dashboard frontend.
+- REST API and authentication for the dashboard.
+- Enrich the ML classifier with host/registrar/content features beyond the URL
+  string.
 - Integration with a real mail relay and DMARC reporting.
 
 ## License

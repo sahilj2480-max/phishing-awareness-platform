@@ -86,4 +86,13 @@ def create_app(store: Store) -> Flask:
             )
         return render_template("landing/report.html")
 
+    @app.get("/dashboard")
+    def dashboard():
+        return render_template(
+            "dashboard.html",
+            overall=store.overall_stats(),
+            campaigns=store.campaigns_summary(),
+            departments=store.department_summary(),
+        )
+
     return app

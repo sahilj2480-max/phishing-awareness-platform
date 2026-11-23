@@ -204,9 +204,66 @@ class Store:
                 JOIN targets t ON t.id = d.target_id
                 LEFT JOIN events e ON e.delivery_id = d.id
                 WHERE d.campaign_id = ?
-                GROUP BY t.department
+                 GROUP BY t.department
                 ORDER BY t.department
                 """,
                 (campaign_id,),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+    def overall_stats(self) -> Dict[str, Any]:
+        """Aggregate delivery/event counts across all campaigns."""
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    COUNT(DISTINCT d.id) AS delivered,
+                    COUNT(DISTINCT CASE WHEN e.type = 'open' THEN d.id END) AS opened,
+                    COUNT(DISTINCT CASE WHEN e.type = 'click' THEN d.id END) AS clicked,
+                    COUNT(DISTINCT CASE WHEN e.type = 'submit' THEN d.id END) AS submitted,
+                    COUNT(DISTINCT CASE WHEN e.type = 'report' THEN d.id END) AS reported
+                FROM deliveries d
+                LEFT JOIN events e ON e.delivery_id = d.id
+                """
+            )
+            return dict(cur.fetchone())
+
+    def campaigns_summary(self) -> List[Dict[str, Any]]:
+        """One row per campaign with aggregated event counts."""
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT c.id, c.name, c.template, c.status,
+                       COUNT(DISTINCT d.id) AS delivered,
+                       COUNT(DISTINCT CASE WHEN e.type = 'open' THEN d.id END) AS opened,
+                       COUNT(DISTINCT CASE WHEN e.type = 'click' THEN d.id END) AS clicked,
+                       COUNT(DISTINCT CASE WHEN e.type = 'submit' THEN d.id END) AS submitted,
+                       COUNT(DISTINCT CASE WHEN e.type = 'report' THEN d.id END) AS reported
+                FROM campaigns c
+                LEFT JOIN deliveries d ON d.campaign_id = c.id
+                LEFT JOIN events e ON e.delivery_id = d.id
+                GROUP BY c.id
+                ORDER BY c.id DESC
+                """
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+    def department_summary(self) -> List[Dict[str, Any]]:
+        """Department breakdown aggregated across all campaigns."""
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT t.department,
+                       COUNT(DISTINCT d.id) AS delivered,
+                       COUNT(DISTINCT CASE WHEN e.type = 'open' THEN d.id END) AS opened,
+                       COUNT(DISTINCT CASE WHEN e.type = 'click' THEN d.id END) AS clicked,
+                       COUNT(DISTINCT CASE WHEN e.type = 'submit' THEN d.id END) AS submitted,
+                       COUNT(DISTINCT CASE WHEN e.type = 'report' THEN d.id END) AS reported
+                FROM deliveries d
+                JOIN targets t ON t.id = d.target_id
+                LEFT JOIN events e ON e.delivery_id = d.id
+                GROUP BY t.department
+                ORDER BY t.department
+                """
             )
             return [dict(row) for row in cur.fetchall()]

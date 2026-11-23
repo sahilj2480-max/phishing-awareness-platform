@@ -45,13 +45,29 @@ reads credentials, only counts.
 
 A Flask app with two kinds of routes: *tracking* (pixel, click redirect) and
 *content* (login, training, report). Tracking routes are silent on unknown
-tokens so the token namespace cannot be fingerprinted.
+tokens so the token namespace cannot be fingerprinted. A `GET /dashboard` route
+renders an admin view backed by the store's aggregation helpers.
 
 ### `detection/analyzer.py`
 
 A `_Scorer` accumulates `Finding`s with severities; each severity maps to a
 weight. The total is capped at 100 and bucketed into `Likely Safe`,
 `Suspicious`, or `Likely Phishing`.
+
+### `detection/ml_classifier.py`
+
+An optional scikit-learn classifier. `extract_features()` turns a URL into a
+fixed-length lexical vector (length, dots, hyphens, IP flag, HTTPS, suspicious
+TLD, shortener, brand impersonation, punycode, and more). `train()` fits a
+`StandardScaler` + `LogisticRegression` pipeline, reports holdout
+accuracy/precision/recall/F1, and persists the model with joblib; `predict()`
+loads it and returns a phishing probability. scikit-learn is imported lazily so
+the rest of PhishGuard runs without it.
+
+The heuristic and ML paths are intentionally complementary: the heuristic rules
+are fully explainable but only cover patterns they encode, while the ML model
+learns decision boundaries from data. Running both (`analyze url --ml`) often
+catches URLs the other misses.
 
 ### `reporting/report.py`
 
@@ -64,4 +80,6 @@ testable and reusable.
 1. `cli.py` parses arguments and loads `Config`.
 2. `campaign.send` mints tokens and (in dry-run) logs the email it would send.
 3. `server` serves tracking endpoints; each event is appended to `events`.
-4. `report` aggregates events per campaign and formats the result.
+4. `report` and `/dashboard` aggregate events per campaign and format the result.
+5. `ml train` / `ml predict` (and `analyze url --ml`) are independent of the
+   campaign pipeline; they read the bundled dataset and a saved model only.
