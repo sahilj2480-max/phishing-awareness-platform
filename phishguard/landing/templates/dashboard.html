@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PhishGuard — Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --border:#334155; --text:#e2e8f0;
+            --muted:#94a3b8; --red:#ef4444; --amber:#f59e0b; --green:#22c55e; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+           font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px; margin-bottom: 32px; }
+    .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+           padding: 18px; }
+    .kpi .label { color: var(--muted); font-size: 13px; text-transform: uppercase;
+                  letter-spacing: .04em; }
+    .kpi .value { font-size: 30px; font-weight: 700; margin: 6px 0 2px; }
+    .kpi .rate { color: var(--muted); font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .panel { background: var(--card); border: 1px solid var(--border);
+             border-radius: 10px; padding: 20px; }
+    .panel h2 { font-size: 15px; margin: 0 0 16px; color: var(--muted);
+                font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--border);
+             font-size: 14px; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    .empty { color: var(--muted); text-align: center; padding: 32px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PhishGuard Dashboard</h1>
+  <div class="sub">Live security awareness simulation metrics</div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Results by campaign</h2>
+      <canvas id="campaignChart" height="220"></canvas>
+    </div>
+    <div class="panel">
+      <h2>Results by department</h2>
+      <canvas id="deptChart" height="220"></canvas>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Campaigns</h2>
+    <table id="campaignTable"></table>
+  </div>
+</div>
+
+<script>
+  const overall = {{ overall | tojson }};
+  const campaigns = {{ campaigns | tojson }};
+  const departments = {{ departments | tojson }};
+
+  const pct = (n, d) => d ? ((n / d) * 100).toFixed(1) + '%' : '—';
+
+  const kpiDefs = [
+    ['Delivered', overall.delivered, ''],
+    ['Opened', overall.opened, pct(overall.opened, overall.delivered) + ' open rate'],
+    ['Clicked', overall.clicked, pct(overall.clicked, overall.delivered) + ' click rate'],
+    ['Submitted', overall.submitted, pct(overall.submitted, overall.delivered) + ' fall rate'],
+    ['Reported', overall.reported, pct(overall.reported, overall.delivered) + ' report rate'],
+  ];
+  document.getElementById('kpis').innerHTML = kpiDefs.map(([label, value, rate]) =>
+    `<div class="kpi"><div class="label">${label}</div>
+     <div class="value">${value}</div><div class="rate">${rate}</div></div>`
+  ).join('');
+
+  const palette = { open: '#38bdf8', click: '#f59e0b', submit: '#ef4444', report: '#22c55e' };
+
+  function drawChart(canvasId, labels, series, stacked) {
+    const datasets = series.map(s => ({
+      label: s.label, data: s.data, backgroundColor: palette[s.key],
+      borderRadius: 4,
+    }));
+    new Chart(document.getElementById(canvasId), {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#94a3b8' } } },
+        scales: {
+          x: { stacked, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+          y: { stacked, beginAtZero: true, ticks: { color: '#94a3b8', precision: 0 },
+               grid: { color: '#334155' } },
+        },
+      },
+    });
+  }
+
+  if (campaigns.length) {
+    const labels = campaigns.map(c => c.name);
+    const keys = ['open', 'click', 'submit', 'report'];
+    const names = { open: 'Opened', click: 'Clicked', submit: 'Submitted', report: 'Reported' };
+    const series = keys.map(k => ({ key: k, label: names[k],
+      data: campaigns.map(c => c[k + 'ed']) }));
+    drawChart('campaignChart', labels, series, false);
+  }
+
+  if (departments.length) {
+    const labels = departments.map(d => d.department || '(none)');
+    const keys = ['open', 'click', 'submit', 'report'];
+    const names = { open: 'Opened', click: 'Clicked', submit: 'Submitted', report: 'Reported' };
+    const series = keys.map(k => ({ key: k, label: names[k],
+      data: departments.map(d => d[k + 'ed']) }));
+    drawChart('deptChart', labels, series, true);
+  }
+
+  const table = document.getElementById('campaignTable');
+  if (campaigns.length) {
+    table.innerHTML =
+      '<tr><th>ID</th><th>Name</th><th>Template</th><th>Delivered</th>' +
+      '<th>Opened</th><th>Clicked</th><th>Submitted</th><th>Reported</th><th>Click rate</th></tr>' +
+      campaigns.map(c => `<tr>
+        <td>${c.id}</td><td>${c.name}</td><td>${c.template}</td>
+        <td>${c.delivered}</td><td>${c.opened}</td><td>${c.clicked}</td>
+        <td>${c.submitted}</td><td>${c.reported}</td>
+        <td>${pct(c.clicked, c.delivered)}</td></tr>`).join('');
+  } else {
+    table.innerHTML = '<tr><td class="empty">No campaigns yet — run a campaign to see data.</td></tr>';
+  }
+</script>
+</body>
+</html>
