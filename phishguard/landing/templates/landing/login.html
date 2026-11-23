@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in — Secure Portal</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+           background: #f3f4f6; display: flex; align-items: center;
+           justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: #fff; padding: 40px; border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.12); width: 320px; }
+    h1 { font-size: 20px; color: #111; margin: 0 0 24px; }
+    label { font-size: 13px; color: #444; display: block; margin: 12px 0 4px; }
+    input { width: 100%; padding: 10px; box-sizing: border-box;
+            border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; }
+    button { width: 100%; padding: 10px; margin-top: 20px; background: #2563eb;
+             color: #fff; border: 0; border-radius: 4px; font-size: 14px;
+             cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    .foot { font-size: 12px; color: #6b7280; margin-top: 16px; text-align: center; }
+  </style>
+</head>
+<body>
+  <form class="card" method="post" action="/submit/{{ token }}">
+    <h1>Sign in</h1>
+    <label for="email">Email address</label>
+    <input id="email" name="email" type="email" autocomplete="username" required />
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required />
+    <button type="submit">Sign in</button>
+    <div class="foot">This portal is for authorized users only.</div>
+  </form>
+</body>
+</html>

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Project data (may contain real campaign data / PII)
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+config.yaml
+!data/targets.example.csv
+!data/campaign.example.yaml
+
+# OS
+Thumbs.db
+.DS_Store
