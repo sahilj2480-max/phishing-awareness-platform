@@ -13,6 +13,7 @@ from typing import Optional
 
 from .config import load_config
 from .detection import analyzer
+from .detection import ml_classifier
 from .engine import campaign as campaign_engine
 from .engine import templates
 from .landing.app import create_app
@@ -89,6 +90,16 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     print(f"Verdict: {result.verdict} (score {result.score}/100)")
     for finding in result.findings:
         print(f"  [{finding.severity:<6}] {finding.message}")
+
+    if getattr(args, "ml", False):
+        print()
+        try:
+            ml = ml_classifier.predict(args.value, args.model)
+            verdict = "Phishing" if ml["label"] == 1 else "Benign"
+            print(f"ML classifier: {verdict} (phishing probability "
+                  f"{ml['phishing_probability']:.3f})")
+        except (RuntimeError, FileNotFoundError) as exc:
+            print(f"ML classifier unavailable: {exc}")
     return 0
 
 
@@ -170,6 +181,22 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ml_train(args: argparse.Namespace) -> int:
+    metrics = ml_classifier.train(args.data, args.model)
+    print(f"Trained model saved to {args.model}")
+    print(f"  samples={metrics['samples']}  holdout={metrics['test_size']}")
+    print(f"  accuracy={metrics['accuracy']:.3f}  precision={metrics['precision']:.3f}  "
+          f"recall={metrics['recall']:.3f}  f1={metrics['f1']:.3f}")
+    return 0
+
+
+def cmd_ml_predict(args: argparse.Namespace) -> int:
+    result = ml_classifier.predict(args.value, args.model)
+    verdict = "Phishing" if result["label"] == 1 else "Benign"
+    print(f"{verdict} (phishing probability {result['phishing_probability']:.3f})")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="phishguard",
@@ -187,6 +214,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_analyze = sub.add_parser("analyze", help="analyze a URL or email for phishing indicators")
     p_analyze.add_argument("target", choices=["url", "email"])
     p_analyze.add_argument("value", help="URL to inspect, or path to a .eml file")
+    p_analyze.add_argument("--ml", action="store_true", help="also run the ML classifier")
+    p_analyze.add_argument("--model", default="data/model.joblib",
+                           help="path to a trained ML model (default: data/model.joblib)")
     p_analyze.set_defaults(func=cmd_analyze)
 
     p_campaign = sub.add_parser("campaign", help="campaign operations")
@@ -211,6 +241,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_report.add_argument("campaign_id", type=int)
     p_report.add_argument("--format", choices=["text", "json", "csv", "html"], default="text")
     p_report.set_defaults(func=cmd_report)
+
+    p_ml = sub.add_parser("ml", help="ML phishing classifier (scikit-learn)")
+    ml_sub = p_ml.add_subparsers(dest="ml_command", required=True)
+
+    p_train = ml_sub.add_parser("train", help="train the classifier and save the model")
+    p_train.add_argument("--data", default="data/url_dataset.csv",
+                         help="path to labeled dataset CSV (default: data/url_dataset.csv)")
+    p_train.add_argument("--model", default="data/model.joblib",
+                         help="where to save the model (default: data/model.joblib)")
+    p_train.set_defaults(func=cmd_ml_train)
+
+    p_predict = ml_sub.add_parser("predict", help="classify a URL with a trained model")
+    p_predict.add_argument("value", help="URL to classify")
+    p_predict.add_argument("--model", default="data/model.joblib",
+                           help="path to a trained model (default: data/model.joblib)")
+    p_predict.set_defaults(func=cmd_ml_predict)
 
     return parser
 
